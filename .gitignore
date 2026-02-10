@@ -1,0 +1,3 @@
+data/vectorstore/*
+data/documents/*
+venv
