@@ -24,7 +24,7 @@ data_dir = os.path.join(base_dir, 'data')
 
 class RagEngine:
     def __init__(self, model_name='sentence-transformers/all-MiniLM-L6-v2'):
-        self.client = Groq()
+        self.client = Groq(api_key="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")
         self.embeddings = HuggingFaceEmbeddings(model_name=model_name)
         self.vector_store = None
     
@@ -189,8 +189,8 @@ class RagEngine:
 
         return response.choices[0].message.content
 
-    def generate_message(self, chat_history, user_query) -> str | None:
-        context = self.format_context_llm(user_lvl='begginer')
+    def generate_message(self, chat_history, user_query, user_level) -> str | None:
+        context = self.format_context_llm(user_lvl=user_level)
         messages = self.build_message(system_prompt=prompt_1, context=context, chat_history=chat_history, user_query=user_query)
         response = self.call_llm(messages=messages)
 
