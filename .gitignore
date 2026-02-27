@@ -1,5 +1,5 @@
 /venv
 /data/documents
-/data/vectore
+/data/vectorstore
 
 .env*
