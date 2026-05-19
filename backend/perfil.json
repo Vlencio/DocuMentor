@@ -1,0 +1,10 @@
+[
+  {
+    "id": 0,
+    "name": "Pedro",
+    "password": "123321",
+    "personal_info": {
+      "city": "uberlandia"
+    }
+  }
+]

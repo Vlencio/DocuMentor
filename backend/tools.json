@@ -1,0 +1,44 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "update_primm_step",
+      "description": "Updates the current PRIMM step the user is on. Call this whenever the user completes a step and is ready to advance to the next one.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "primm_step": {
+            "type": "integer",
+            "description": "The PRIMM step the user is currently on.",
+            "enum": [0, 1, 2, 3, 4, 5]
+          }
+        },
+        "required": ["primm_step"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "update_user_information",
+      "description": "Update informations about the user. Call this whenever you want to add, update or remove any information about the user.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "description": "The id that identify the user"
+          },
+          "key": {
+            "type": "string",
+            "description": "The key that will hold the information."
+          },
+          "value": {
+            "type": "string",
+            "description": "The value of the key that will hold the information."
+          }
+        }
+      }
+    }
+  }
+]
