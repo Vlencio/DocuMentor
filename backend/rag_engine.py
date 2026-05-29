@@ -7,8 +7,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import re
 from typing import List
 
+import anthropic
 from dotenv import load_dotenv
-from groq import Groq
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -24,9 +24,7 @@ data_dir = os.path.join(base_dir, "data")
 
 class RagEngine:
     def __init__(self, model_name="sentence-transformers/all-MiniLM-L6-v2"):
-        self.client = Groq(
-            api_key="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"
-        )  # PUT YOUR GROQ API KEY HERE, OR SET IT IN THE .env FILE
+        self.client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
         self.embeddings = HuggingFaceEmbeddings(model_name=model_name)
         self.vector_store = None
         self.primm_step = None
@@ -174,29 +172,31 @@ class RagEngine:
     # --- Generation ---
     def build_message(
         self, system_prompt, context, user_query, chat_history, primm_step
-    ) -> list[dict[str, None]]:
-
-        # Detecta a língua e reforça no system prompt
+    ) -> tuple[str, list]:
         system_with_lang = (
             system_prompt
             + f"\n\nIMPORTANT: The user's message is in the language you must reply in. Do NOT switch languages under any circumstance."
         )
 
-        message = [{"role": "system", "content": system_with_lang}]
+        messages = []
+        for m in (chat_history or []):
+            content = m.get("content")
+            role = m.get("role")
+            if content is None:
+                continue
+            # Anthropic API requires array content for assistant messages in tool-use conversations
+            if role == "assistant" and isinstance(content, str):
+                content = [{"type": "text", "text": content}]
+            messages.append({"role": role, "content": content})
 
-        if chat_history:
-            message.extend(chat_history)
-
-        # Wrapper neutro, sem forçar idioma
         final_prompt = (
             f"PRIMM Step: {primm_step}\n"
             f"Context:\n{context}\n\n"
-            f"{user_query}"  # ← Mensagem do usuário pura, sem wrapper em PT
+            f"{user_query}"
         )
+        messages.append({"role": "user", "content": final_prompt})
 
-        message.append({"role": "user", "content": final_prompt})
-
-        return message
+        return system_with_lang, messages
 
     def format_context_llm(self, chunks=None, user_lvl: str | None = None) -> str:
         string = f"User level: {user_lvl}\n"
@@ -207,35 +207,66 @@ class RagEngine:
 
         return string
 
-    def call_llm(self, messages) -> str | None:
+    def _execute_tool(self, tool_name: str, tool_input: dict) -> str:
+        if tool_name == "update_primm_step":
+            self.update_primm_step(str(tool_input.get("primm_step", self.primm_step)))
+            return f"PRIMM step updated to {tool_input.get('primm_step')}"
+        if tool_name == "update_user_information":
+            return f"Updated {tool_input.get('key')} = {tool_input.get('value')}"
+        return "Tool executed."
+
+    def call_llm(self, system: str, messages: list) -> str | None:
         with open("backend/tools.json", "r") as file:
             tools = json.load(file)
 
-        print(self.primm_step)
+        current_messages = list(messages)
 
-        response = self.client.chat.completions.create(
-            messages=messages,
-            model="llama-3.3-70b-versatile",
-            tools=tools,
-            tool_choice="auto",
-        )
+        while True:
+            response = self.client.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=4096,
+                system=system,
+                tools=tools,
+                messages=current_messages,
+            )
 
-        return response.choices[0].message.content
+            if response.stop_reason != "tool_use":
+                for block in response.content:
+                    if block.type == "text":
+                        return block.text
+                return None
+
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    result = self._execute_tool(block.name, block.input)
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result,
+                    })
+
+            content_dicts = []
+            for block in response.content:
+                if block.type == "text":
+                    content_dicts.append({"type": "text", "text": block.text})
+                elif block.type == "tool_use":
+                    content_dicts.append({"type": "tool_use", "id": block.id, "name": block.name, "input": block.input})
+            current_messages.append({"role": "assistant", "content": content_dicts})
+            current_messages.append({"role": "user", "content": tool_results})
 
     def generate_message(
         self, chat_history, user_query, user_level, primm_step
     ) -> str | None:
         context = self.format_context_llm(user_lvl=user_level)
-        messages = self.build_message(
+        system, messages = self.build_message(
             system_prompt=prompt_1,
             context=context,
             chat_history=chat_history,
             user_query=user_query,
             primm_step=self.primm_step,
         )
-        response = self.call_llm(messages=messages)
-
-        return response
+        return self.call_llm(system=system, messages=messages)
 
     # --- Vector Store ---
     def get_vector_store(self, doc_name, store_name):
@@ -271,16 +302,14 @@ class RagEngine:
             query=user_query, vector_store=vector_store
         )
         formated_context = self.format_context_llm(chunks, "begginer")
-        message = self.build_message(
+        system, messages = self.build_message(
             system_prompt=prompt_1,
             context=formated_context,
             user_query=user_query,
             chat_history=[],
             primm_step="0",
         )
-        response = self.call_llm(messages=message)
-
-        return response
+        return self.call_llm(system=system, messages=messages)
 
     # --- Tools ---
     def update_primm_step(self, primm_step: str):
