@@ -1,10 +1,10 @@
 import json
 import os
 
-from groq import Groq
+import anthropic
 from langdetect import DetectorFactory, LangDetectException, detect_langs
 
-from backend.config import BASE_DIR, GROQ_API_KEY, GROQ_MODEL, GROQ_REASONING_EFFORT
+from backend.config import ANTHROPIC_API_KEY, ANTHROPIC_EFFORT, ANTHROPIC_MODEL, BASE_DIR
 from backend.tutor.prompts import prompt_1
 
 # Make language detection give the same answer every time for the same text
@@ -16,11 +16,14 @@ with open(os.path.join(BASE_DIR, "tools.json"), "r") as file:
     tools = json.load(file)
 
 MAX_TOOLS_ROUND = 5
+# Room for the model's thinking plus a full reply
+MAX_TOKENS = 8000
 
 PRIMM_STEP_NAMES = ["lesson not started", "Predict", "Run", "Investigate", "Modify", "Make"]
 ONBOARDING_FIELDS = ["name", "favorite_language", "topic"]
 
 FALLBACK_REPLY = "Desculpe, não consegui concluir a resposta. Tente novamente."
+REFUSAL_REPLY = "Desculpe, não posso ajudar com esse pedido. Vamos voltar à programação?"
 
 
 def detect_language(text, previous=None):
@@ -63,12 +66,9 @@ def run_tool(name, args, state, start_step):
     return {"error": f"Unknown tool: {name}"}
 
 
-def build_message(system_prompt, context, user_query, chat_history, reply_language=None) -> list[dict]:
-    # gpt-oss reads app instructions from the "developer" role
-    message = [{"role": "developer", "content": system_prompt}]
-
-    if chat_history:
-        message.extend(chat_history)
+def build_message(context, user_query, chat_history, reply_language=None) -> list[dict]:
+    # The system prompt goes in its own parameter, not in the messages
+    message = list(chat_history or [])
 
     # Context first, then the student's message, then the language reminder:
     # the end of the input weighs the most
@@ -105,54 +105,53 @@ def format_context_llm(user_profile, primm_step, user_lvl) -> str:
     return string
 
 
+def response_text(response) -> str:
+    # A response can start with thinking blocks, so read the text blocks by type
+    return "".join(block.text for block in response.content if block.type == "text").strip()
+
+
 def call_llm(messages, state) -> str:
     start_step = state["primm_step"]
 
     for _ in range(MAX_TOOLS_ROUND):
-        response = client.chat.completions.create(
-            messages=messages,
-            model=GROQ_MODEL,
+        response = client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=MAX_TOKENS,
+            # The system prompt and tools are the same on every request: cache them
+            system=[{"type": "text", "text": prompt_1, "cache_control": {"type": "ephemeral"}}],
             tools=tools,
-            tool_choice="auto",
-            reasoning_effort=GROQ_REASONING_EFFORT,
+            messages=messages,
+            output_config={"effort": ANTHROPIC_EFFORT},
         )
 
-        message = response.choices[0].message
+        if response.stop_reason == "refusal":
+            return REFUSAL_REPLY
 
-        if not message.tool_calls:
-            if message.content:
-                return message.content
-            # gpt-oss sometimes answers only in its hidden reasoning: ask again
-            continue
+        if response.stop_reason != "tool_use":
+            # end_turn, or max_tokens with a partial reply
+            return response_text(response) or FALLBACK_REPLY
 
-        messages.append({
-            "role": "assistant",
-            "content": message.content,
-            "tool_calls": [
-                {
-                    "id": call.id,
-                    "type": "function",
-                    "function": {
-                        "name": call.function.name,
-                        "arguments": call.function.arguments,
-                    },
-                }
-                for call in message.tool_calls
-            ],
-        })
+        # Send back the whole assistant turn unchanged (thinking blocks included)
+        messages.append({"role": "assistant", "content": response.content})
 
-        for call in message.tool_calls:
+        tool_results = []
+        for block in response.content:
+            if block.type != "tool_use":
+                continue
             try:
-                args = json.loads(call.function.arguments)
-                result = run_tool(call.function.name, args, state, start_step)
-            except (json.JSONDecodeError, KeyError) as e:
-                result = {"error": str(e)}
+                result = run_tool(block.name, block.input, state, start_step)
+            except (KeyError, TypeError, AttributeError) as e:
+                result = {"error": f"Invalid arguments: {e}"}
 
-            messages.append({
-                "role": "tool",
-                "tool_call_id": call.id,
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
                 "content": json.dumps(result),
+                "is_error": "error" in result,
             })
+
+        # All results go back together in one user message
+        messages.append({"role": "user", "content": tool_results})
 
     return FALLBACK_REPLY
 
@@ -171,7 +170,6 @@ def generate_message(chat_history, user_query, user_level, primm_step, user_prof
         user_lvl=user_level,
     )
     messages = build_message(
-        system_prompt=prompt_1,
         context=context,
         chat_history=chat_history,
         user_query=user_query,
@@ -182,4 +180,4 @@ def generate_message(chat_history, user_query, user_level, primm_step, user_prof
     return response, state
 
 
-client = Groq(api_key=GROQ_API_KEY)
+client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)

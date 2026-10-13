@@ -206,10 +206,22 @@ if prompt:
         if error:
             # Drop the unanswered message so the user can try again
             st.session_state.messages.pop()
+            status = getattr(getattr(error, "response", None), "status_code", None)
             if isinstance(error, requests.ConnectionError):
                 st.error(
                     "Não consegui me conectar ao servidor. Verifique se a API está rodando.",
                     icon=":material/cloud_off:",
+                )
+            elif status == 429:
+                wait = error.response.headers.get("Retry-After")
+                st.warning(
+                    f"Muitas mensagens agora. Espere {wait + ' segundos' if wait else 'alguns segundos'} e tente de novo.",
+                    icon=":material/hourglass_top:",
+                )
+            elif status == 503:
+                st.warning(
+                    "Esta demonstração atingiu o limite de uso. Obrigado por testar!",
+                    icon=":material/savings:",
                 )
             else:
                 st.error(

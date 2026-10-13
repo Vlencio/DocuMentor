@@ -1,42 +1,38 @@
 [
   {
-    "type": "function",
-    "function": {
-      "name": "update_primm_step",
-      "description": "Record which PRIMM stage the lesson is in. Call it every time the lesson moves to a new stage, in the same turn as the reply that starts that stage (for example, set 1 when you present the example code and ask for a prediction). Do not call it when the lesson stays in the same stage. Do not call it before onboarding is complete.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "primm_step": {
-            "type": "integer",
-            "enum": [0, 1, 2, 3, 4, 5],
-            "description": "The stage the lesson is now in: 0 = not started, 1 = Predict, 2 = Run, 3 = Investigate, 4 = Modify, 5 = Make."
-          }
-        },
-        "required": ["primm_step"]
-      }
+    "name": "update_primm_step",
+    "description": "Record which PRIMM stage the lesson is in. Call it every time the lesson moves to a new stage, in the same turn as the reply that starts that stage (for example, set 1 when you present the example code and ask for a prediction). Do not call it when the lesson stays in the same stage. Do not call it before onboarding is complete.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "primm_step": {
+          "type": "integer",
+          "enum": [0, 1, 2, 3, 4, 5],
+          "description": "The stage the lesson is now in: 0 = not started, 1 = Predict, 2 = Run, 3 = Investigate, 4 = Modify, 5 = Make."
+        }
+      },
+      "required": ["primm_step"],
+      "additionalProperties": false
     }
   },
   {
-    "type": "function",
-    "function": {
-      "name": "update_user_information",
-      "description": "Save one piece of information about the student: their name, favorite programming language, or the programming topic they want to learn. Call it as soon as the student gives one of these, and once per piece of information (a message with a name and a language needs two calls). Also call it when the student changes one of them later. Do not call it for information already saved with the same value.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string",
-            "enum": ["name", "favorite_language", "topic"],
-            "description": "Which piece of information to save."
-          },
-          "value": {
-            "type": "string",
-            "description": "The value to save, as the student said it (e.g. \"Pedro\", \"Python\", \"loops\")."
-          }
+    "name": "update_user_information",
+    "description": "Save one piece of information about the student: their name, favorite programming language, or the programming topic they want to learn. Call it as soon as the student gives one of these, and once per piece of information (a message with a name and a language needs two calls). Also call it when the student changes one of them later. Do not call it for information already saved with the same value.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "enum": ["name", "favorite_language", "topic"],
+          "description": "Which piece of information to save."
         },
-        "required": ["key", "value"]
-      }
+        "value": {
+          "type": "string",
+          "description": "The value to save, as the student said it (e.g. \"Pedro\", \"Python\", \"loops\")."
+        }
+      },
+      "required": ["key", "value"],
+      "additionalProperties": false
     }
   }
 ]
