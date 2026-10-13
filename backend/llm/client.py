@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import anthropic
 from langdetect import DetectorFactory, LangDetectException, detect_langs
@@ -28,19 +29,49 @@ FALLBACK_REPLY = "Desculpe, não consegui concluir a resposta. Tente novamente."
 REFUSAL_REPLY = "Desculpe, não posso ajudar com esse pedido. Vamos voltar à programação?"
 
 
-def detect_language(text, previous=None):
-    """Return the language of the text, or the previous one when it's unclear.
+# Lines with these are treated as code. Quotes, colons and apostrophes are left out
+# because normal sentences use them too ("I'm", "Example: ...")
+CODE_CHARACTERS = set("=()[]{}<>\\`")
+# A message shorter than this is never trusted to change the conversation's language
+MIN_WORDS_TO_SWITCH = 4
+# How sure the detector must be before the language changes
+MIN_CONFIDENCE = 0.9
+# Setting the first language is less risky than changing it, so it needs less evidence
+MIN_WORDS_FIRST = 3
+MIN_CONFIDENCE_FIRST = 0.6
 
-    Short messages like "Hi" are often misdetected, so only the supported
-    languages count, and anything uncertain keeps the previous language.
+
+def prose_only(text):
+    """Remove code from a message, so only the student's own words are analysed."""
+    text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+    text = re.sub(r"`[^`]*`", " ", text)
+    lines = [line for line in text.splitlines() if not CODE_CHARACTERS & set(line)]
+    words = [word for word in " ".join(lines).split() if any(ch.isalpha() for ch in word)]
+    return " ".join(words), len(words)
+
+
+def detect_language(text, previous=None):
+    """Return the conversation's language, switching only on clear evidence.
+
+    The detector often gets short messages and code wrong ("no idea" comes back as
+    Portuguese), and whatever it returns is sent to the model as an order. So the
+    language only changes when a message has enough real words and the detector
+    is very sure. Otherwise the previous language stays.
     """
+    min_words = MIN_WORDS_FIRST if previous is None else MIN_WORDS_TO_SWITCH
+    min_confidence = MIN_CONFIDENCE_FIRST if previous is None else MIN_CONFIDENCE
+
+    prose, word_count = prose_only(text)
+    if word_count < min_words:
+        return previous
+
     try:
-        candidates = detect_langs(text)
+        candidates = detect_langs(prose)
     except LangDetectException:
         return previous
 
     for candidate in candidates:
-        if candidate.lang in SUPPORTED_LANGUAGES and candidate.prob >= 0.25:
+        if candidate.lang in SUPPORTED_LANGUAGES and candidate.prob >= min_confidence:
             return SUPPORTED_LANGUAGES[candidate.lang]
 
     return previous
