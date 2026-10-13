@@ -23,7 +23,8 @@ MAX_HISTORY_MESSAGES = 15
 MAX_TOKENS = 8000
 
 PRIMM_STEP_NAMES = ["lesson not started", "Predict", "Run", "Investigate", "Modify", "Make"]
-ONBOARDING_FIELDS = ["name", "favorite_language", "topic"]
+# Required before the lesson starts. The name is optional: saved only if the student gives it
+ONBOARDING_FIELDS = ["favorite_language", "topic"]
 
 FALLBACK_REPLY = "Sorry, I couldn't finish my reply. Please try again."
 REFUSAL_REPLY = "Sorry, I can't help with that request. Shall we get back to programming?"

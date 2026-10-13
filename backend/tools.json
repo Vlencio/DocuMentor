@@ -17,7 +17,7 @@
   },
   {
     "name": "update_user_information",
-    "description": "Save one piece of information about the student: their name, favorite programming language, or the programming topic they want to learn. Call it as soon as the student gives one of these, and once per piece of information (a message with a name and a language needs two calls). Also call it when the student changes one of them later. Do not call it for information already saved with the same value.",
+    "description": "Save one piece of information about the student: the programming language they want to use, the programming topic they want to learn, or their name if they mention it (never ask for it). Call it as soon as the student gives one of these, and once per piece of information (a message with a language and a topic needs two calls). Also call it when the student changes one of them later. Do not call it for information already saved with the same value.",
     "input_schema": {
       "type": "object",
       "properties": {
