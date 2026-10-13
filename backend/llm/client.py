@@ -16,6 +16,8 @@ with open(os.path.join(BASE_DIR, "tools.json"), "r") as file:
     tools = json.load(file)
 
 MAX_TOOLS_ROUND = 5
+# Only the most recent messages are sent to the model, to keep each request's cost bounded
+MAX_HISTORY_MESSAGES = 15
 # Room for the model's thinking plus a full reply
 MAX_TOKENS = 8000
 
@@ -66,9 +68,29 @@ def run_tool(name, args, state, start_step):
     return {"error": f"Unknown tool: {name}"}
 
 
+def recent_history(chat_history) -> list[dict]:
+    # Ignore anything that isn't a plain user/assistant text message
+    history = [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in chat_history or []
+        if isinstance(msg, dict)
+        and msg.get("role") in ("user", "assistant")
+        and isinstance(msg.get("content"), str)
+        and msg["content"].strip()
+    ]
+
+    history = history[-MAX_HISTORY_MESSAGES:]
+
+    # The conversation sent to the model has to start with a user message
+    while history and history[0]["role"] != "user":
+        history.pop(0)
+
+    return history
+
+
 def build_message(context, user_query, chat_history, reply_language=None) -> list[dict]:
     # The system prompt goes in its own parameter, not in the messages
-    message = list(chat_history or [])
+    message = recent_history(chat_history)
 
     # Context first, then the student's message, then the language reminder:
     # the end of the input weighs the most
