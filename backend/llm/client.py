@@ -25,8 +25,8 @@ MAX_TOKENS = 8000
 PRIMM_STEP_NAMES = ["lesson not started", "Predict", "Run", "Investigate", "Modify", "Make"]
 ONBOARDING_FIELDS = ["name", "favorite_language", "topic"]
 
-FALLBACK_REPLY = "Desculpe, não consegui concluir a resposta. Tente novamente."
-REFUSAL_REPLY = "Desculpe, não posso ajudar com esse pedido. Vamos voltar à programação?"
+FALLBACK_REPLY = "Sorry, I couldn't finish my reply. Please try again."
+REFUSAL_REPLY = "Sorry, I can't help with that request. Shall we get back to programming?"
 
 
 # Lines with these are treated as code. Quotes, colons and apostrophes are left out
