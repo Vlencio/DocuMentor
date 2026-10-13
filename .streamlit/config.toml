@@ -1,0 +1,14 @@
+[theme]
+showWidgetBorder = true
+baseRadius = "0.75rem"
+
+[theme.light]
+primaryColor = "#6C5CE7"
+borderColor = "#E4E2F0"
+
+[theme.dark]
+primaryColor = "#A29BFE"
+borderColor = "#34324A"
+
+[client]
+toolbarMode = "minimal"

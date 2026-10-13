@@ -1,5 +1,5 @@
 /venv
-/data/documents
-/data/vectorstore
+__pycache__/
+.claude/
 
 .env*
